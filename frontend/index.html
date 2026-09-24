@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atoms Demo —— AI 智能体构建平台</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- 顶部导航 -->
+  <header class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="/">
+        <span class="brand-dot"></span> Atoms Demo
+      </a>
+      <nav class="nav-links">
+        <a href="#builder" class="active">构建应用</a>
+        <a href="#projects">我的项目</a>
+        <a href="#how">工作原理</a>
+      </nav>
+      <div class="nav-right">
+        <button id="openPreviewBtn" class="btn btn-primary btn-sm" disabled>打开应用 ↗</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero + 构建区 -->
+  <main>
+    <section class="hero" id="builder">
+      <div class="hero-inner">
+        <h1>我们能如何帮助你？</h1>
+        <p class="hero-sub">描述你想要的应用，AI 智能体为你编写代码、生成成品，并直接在这里预览。</p>
+
+        <div class="prompt-box">
+          <textarea id="promptInput" rows="2"
+            placeholder="描述你想构建的应用，例如：一个带排行榜的番茄钟计时器，或一个记账小工具……"></textarea>
+          <button id="buildBtn" class="btn btn-primary">开始构建</button>
+        </div>
+
+        <div class="suggestions">
+          <span class="suggest-label">试试：</span>
+          <button class="chip" data-prompt="一个简洁的番茄钟，支持开始/暂停/重置，记录每天完成数量，用 localStorage 保存">番茄钟计时器</button>
+          <button class="chip" data-prompt="一个记账小工具，可以添加收入/支出、按分类统计、展示占比图">记账小工具</button>
+          <button class="chip" data-prompt="一个待办清单，支持添加、勾选完成、筛选、统计完成率">待办清单</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 生成状态 -->
+    <section class="status-area" id="statusArea" hidden>
+      <div class="status-card">
+        <div class="status-steps" id="statusSteps">
+          <div class="step active" data-step="0"><span class="step-dot"></span>理解需求</div>
+          <div class="step" data-step="1"><span class="step-dot"></span>AI 编写代码</div>
+          <div class="step" data-step="2"><span class="step-dot"></span>构建应用</div>
+        </div>
+        <div class="status-text" id="statusText">正在理解你的需求…</div>
+      </div>
+    </section>
+
+    <!-- 结果区 -->
+    <section class="result" id="resultSection" hidden>
+      <div class="result-head">
+        <div class="result-title">
+          <h2 id="appName">未命名应用</h2>
+          <p id="appDesc"></p>
+        </div>
+        <div class="result-actions">
+          <button id="viewCodeBtn" class="btn btn-ghost">查看代码</button>
+          <button id="downloadBtn" class="btn btn-ghost">下载 HTML</button>
+          <button id="rebuildBtn" class="btn btn-ghost" title="基于当前需求重新生成并更新本项目">重新生成</button>
+        </div>
+      </div>
+      <div class="preview-frame">
+        <!-- allow-same-origin：让 AI 生成的应用在预览 iframe 里可用 localStorage 持久化；
+             本宿主页面无登录态/敏感数据，且代码为用户自己生成，风险可接受 -->
+        <iframe id="previewFrame" sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-popups" title="应用预览"></iframe>
+        <div class="preview-empty" id="previewEmpty">应用预览将在这里展示</div>
+      </div>
+      <div class="modify-bar">
+        <input id="modifyInput" type="text" placeholder="继续修改这个应用，例如：把背景改成深色、加一个排行榜……" />
+        <button id="modifyBtn" class="btn btn-ghost">修改应用</button>
+      </div>
+    </section>
+
+    <!-- 历史项目 -->
+    <section class="projects" id="projects">
+      <div class="projects-head">
+        <h2>我的项目</h2>
+        <span class="projects-count" id="projectsCount"></span>
+      </div>
+      <div class="projects-grid" id="projectsGrid">
+        <div class="projects-empty" id="projectsEmpty">还没有项目，先在上面描述一个应用试试吧 ✨</div>
+      </div>
+    </section>
+
+    <!-- 工作原理 -->
+    <section class="how" id="how">
+      <h2>工作原理</h2>
+      <div class="how-grid">
+        <div class="how-card"><div class="how-num">01</div><h3>描述需求</h3><p>用一句话告诉 AI 你想要什么应用。</p></div>
+        <div class="how-card"><div class="how-num">02</div><h3>AI 生成代码</h3><p>DeepSeek 智能体理解需求，编写完整的单文件应用。</p></div>
+        <div class="how-card"><div class="how-num">03</div><h3>沙箱预览</h3><p>生成的应用在隔离环境中即时运行，可交互体验。</p></div>
+        <div class="how-card"><div class="how-num">04</div><h3>持久化保存</h3><p>每个项目自动保存到数据库，随时回来继续使用。</p></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 代码弹窗 -->
+  <div class="modal-mask" id="codeModal" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h3>应用源代码</h3>
+        <button class="modal-close" id="codeModalClose">✕</button>
+      </div>
+      <pre class="code-view" id="codeView"></pre>
+      <div class="modal-foot">
+        <button id="copyCodeBtn" class="btn btn-ghost btn-sm">复制代码</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右下角提示浮窗 -->
+  <button class="help-fab" id="helpFab">?</button>
+  <div class="help-pop" id="helpPop" hidden>
+    <b>提示</b>
+    <p>密钥仅存于后端 <code>backend/.env</code>，不会出现在代码中或前端。</p>
+  </div>
+
+  <footer class="footer">Atoms Demo · AI 智能体驱动的应用构建平台 · 笔试作品</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
