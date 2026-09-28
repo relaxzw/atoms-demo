@@ -41,6 +41,9 @@
   var regPassword = $("regPassword");
   var pwdChecks = $("pwdChecks");
   var registerBtn = $("registerBtn");
+  var adminBtn = $("adminBtn");
+  var adminModal = $("adminModal");
+  var adminUserList = $("adminUserList");
   var currentCaptchaToken = "";
 
   var currentProject = null;   // { id, name, description, prompt, html_code, created_at }
@@ -198,14 +201,16 @@
     var user = localStorage.getItem("atoms_user");
     if (user) {
       var balance = localStorage.getItem("atoms_balance");
-      userInfo.textContent = "👤 " + user + (balance !== null ? " · " + balance + " tokens" : "");
+      userInfo.textContent = "👤 " + user + (balance !== null ? " · 剩余 " + balance + " tokens" : "");
       userInfo.hidden = false;
       authBtn.textContent = "退出";
       authModal.hidden = true;  // 已登录：关闭登录门禁，展示主界面
+      adminBtn.hidden = localStorage.getItem("atoms_is_admin") !== "1";
     } else {
       userInfo.hidden = true;
       authBtn.textContent = "登录 / 注册";
       authModal.hidden = false;  // 未登录：强制显示登录门禁
+      adminBtn.hidden = true;
       loadCaptcha();
     }
   }
@@ -371,6 +376,7 @@
         localStorage.removeItem("atoms_user");
         localStorage.removeItem("atoms_token");
         localStorage.removeItem("atoms_balance");
+        localStorage.removeItem("atoms_is_admin");
         updateUserInfo();
       }
       return;
@@ -446,6 +452,7 @@
       localStorage.setItem("atoms_user", data.username);
       localStorage.setItem("atoms_token", data.token);
       localStorage.setItem("atoms_balance", data.token_balance);
+      localStorage.setItem("atoms_is_admin", data.is_admin || 0);
       updateUserInfo();
       authModal.hidden = true;
       loginCaptcha.value = "";
@@ -456,6 +463,59 @@
       loadCaptcha();
       loginCaptcha.value = "";
     }).finally(function () { loginBtn.disabled = false; });
+  });
+
+  /* ---------- 用户管理（仅管理员） ---------- */
+  function loadAdminUsers() {
+    var token = localStorage.getItem("atoms_token");
+    api("/admin/users?token=" + encodeURIComponent(token)).then(function (list) {
+      if (!list.length) {
+        adminUserList.innerHTML = '<tr><td colspan="6">暂无用户</td></tr>';
+        return;
+      }
+      adminUserList.innerHTML = list.map(function (u) {
+        var status = u.status === "active"
+          ? '<span class="status-tag ok">正常</span>'
+          : '<span class="status-tag bad">已禁用</span>';
+        var role = u.is_admin ? "管理员" : "用户";
+        var btns = u.status === "active"
+          ? '<button class="admin-act" data-act="disable" data-id="' + u.id + '">禁用</button>'
+          : '<button class="admin-act" data-act="enable" data-id="' + u.id + '">启用</button>';
+        btns += '<button class="admin-act del-btn" data-act="delete" data-id="' + u.id + '">删除</button>';
+        return '<tr>' +
+          "<td>" + u.id + "</td>" +
+          "<td>" + escapeHtml(u.username) + "</td>" +
+          "<td>" + u.token_balance + "</td>" +
+          "<td>" + status + "</td>" +
+          "<td>" + role + "</td>" +
+          "<td>" + btns + "</td>" +
+        "</tr>";
+      }).join("");
+    }).catch(function (err) { alert(err.message); });
+  }
+
+  adminBtn.addEventListener("click", function () {
+    adminModal.hidden = false;
+    loadAdminUsers();
+  });
+
+  $("adminModalClose").addEventListener("click", function () { adminModal.hidden = true; });
+  adminModal.addEventListener("click", function (e) { if (e.target === adminModal) adminModal.hidden = true; });
+
+  adminUserList.addEventListener("click", function (e) {
+    var btn = e.target.closest(".admin-act");
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    var act = btn.getAttribute("data-act");
+    var token = localStorage.getItem("atoms_token");
+    if (act === "delete") {
+      if (!confirm("确定删除该用户吗？")) return;
+      api("/admin/users/" + id + "?token=" + encodeURIComponent(token), { method: "DELETE" })
+        .then(loadAdminUsers).catch(function (err) { alert(err.message); });
+    } else {
+      api("/admin/users/" + id + "/" + act + "?token=" + encodeURIComponent(token), { method: "POST" })
+        .then(loadAdminUsers).catch(function (err) { alert(err.message); });
+    }
   });
 
   /* ---------- 历史项目 ---------- */

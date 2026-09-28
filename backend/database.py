@@ -41,14 +41,20 @@ def init_db() -> None:
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
                 token_balance INTEGER NOT NULL DEFAULT 100000,
+                status TEXT NOT NULL DEFAULT 'active',
+                is_admin INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL
             )
             """
         )
-        # 迁移：旧 users 表若缺少 token_balance 列则补齐
+        # 迁移：旧 users 表补齐新增列
         cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
         if "token_balance" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN token_balance INTEGER NOT NULL DEFAULT 100000")
+        if "status" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+        if "is_admin" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
         conn.commit()
 
 
@@ -104,16 +110,16 @@ def rename_project(project_id: int, name: str) -> dict | None:
     return dict(row) if row else None
 
 
-def create_user(username: str, password_hash: str, token_balance: int = 100000) -> dict | None:
+def create_user(username: str, password_hash: str, token_balance: int = 100000, is_admin: int = 0) -> dict | None:
     """创建用户，用户名已存在返回 None"""
     try:
         with _connect() as conn:
             cur = conn.execute(
-                "INSERT INTO users (username, password_hash, token_balance, created_at) VALUES (?, ?, ?, ?)",
-                (username, password_hash, token_balance, time.time()),
+                "INSERT INTO users (username, password_hash, token_balance, status, is_admin, created_at) VALUES (?, ?, ?, 'active', ?, ?)",
+                (username, password_hash, token_balance, is_admin, time.time()),
             )
             conn.commit()
-            row = conn.execute("SELECT id, username, token_balance, created_at FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+            row = conn.execute("SELECT id, username, token_balance, status, is_admin, created_at FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
         return dict(row)
     except sqlite3.IntegrityError:
         return None
@@ -129,3 +135,28 @@ def update_token_balance(user_id: int, balance: int) -> None:
     with _connect() as conn:
         conn.execute("UPDATE users SET token_balance = ? WHERE id = ?", (balance, user_id))
         conn.commit()
+
+
+def list_users() -> list[dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT id, username, token_balance, status, is_admin, created_at FROM users ORDER BY id"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def set_user_status(user_id: int, status: str) -> dict | None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET status = ? WHERE id = ?", (status, user_id))
+        conn.commit()
+        row = conn.execute(
+            "SELECT id, username, token_balance, status, is_admin, created_at FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_user(user_id: int) -> bool:
+    with _connect() as conn:
+        cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+    return cur.rowcount > 0

@@ -36,6 +36,7 @@ import database
 # ---------- 业务配置（可 .env 覆盖） ----------
 SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "15872398796")
 DEFAULT_TOKEN_LIMIT = int(os.environ.get("DEFAULT_TOKEN_LIMIT", "100000"))
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 
 # ---------- 登录会话（内存 token → 用户） ----------
 _sessions: dict[str, dict] = {}
@@ -250,10 +251,11 @@ def register(req: RegisterRequest):
     if database.get_user_by_username(username):
         raise HTTPException(status_code=409, detail="用户名已存在")
     stored = auth.hash_password(req.password_hash)
-    user = database.create_user(username, stored, DEFAULT_TOKEN_LIMIT)
+    is_admin = 1 if username == ADMIN_USERNAME else 0
+    user = database.create_user(username, stored, DEFAULT_TOKEN_LIMIT, is_admin=is_admin)
     if user is None:
         raise HTTPException(status_code=409, detail="用户名已存在")
-    return {"ok": True, "username": user["username"], "token_balance": user["token_balance"]}
+    return {"ok": True, "username": user["username"], "token_balance": user["token_balance"], "is_admin": user["is_admin"]}
 
 
 @app.post("/api/login")
@@ -267,9 +269,11 @@ def login(req: LoginRequest):
     user = database.get_user_by_username(req.username.strip())
     if user is None or not auth.verify_password(req.password_hash, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
+    if user["status"] == "disabled":
+        raise HTTPException(status_code=403, detail=f"用户已禁用，请联系 {SUPPORT_PHONE}")
     token = secrets.token_hex(32)
     _sessions[token] = {"username": user["username"], "expires": time.time() + _SESSION_TTL}
-    return {"ok": True, "token": token, "username": user["username"], "token_balance": user["token_balance"]}
+    return {"ok": True, "token": token, "username": user["username"], "token_balance": user["token_balance"], "is_admin": user["is_admin"]}
 
 
 @app.get("/api/me")
@@ -278,7 +282,55 @@ def me(token: str):
     user = _auth_user(token)
     if user is None:
         raise HTTPException(status_code=401, detail="请先登录")
-    return {"username": user["username"], "token_balance": user["token_balance"]}
+    return {"username": user["username"], "token_balance": user["token_balance"], "is_admin": user["is_admin"]}
+
+
+def _auth_admin(token: str) -> dict | None:
+    """校验管理员 token，返回管理员用户或 None"""
+    user = _auth_user(token)
+    if user is None or not user.get("is_admin"):
+        return None
+    return user
+
+
+# ---------- 管理后台 API（仅管理员） ----------
+@app.get("/api/admin/users")
+def admin_list_users(token: str):
+    if _auth_admin(token) is None:
+        raise HTTPException(status_code=403, detail="无管理员权限")
+    return database.list_users()
+
+
+@app.post("/api/admin/users/{user_id}/disable")
+def admin_disable_user(user_id: int, token: str):
+    if _auth_admin(token) is None:
+        raise HTTPException(status_code=403, detail="无管理员权限")
+    u = database.set_user_status(user_id, "disabled")
+    if u is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return u
+
+
+@app.post("/api/admin/users/{user_id}/enable")
+def admin_enable_user(user_id: int, token: str):
+    if _auth_admin(token) is None:
+        raise HTTPException(status_code=403, detail="无管理员权限")
+    u = database.set_user_status(user_id, "active")
+    if u is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return u
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_delete_user(user_id: int, token: str):
+    admin = _auth_admin(token)
+    if admin is None:
+        raise HTTPException(status_code=403, detail="无管理员权限")
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="不能删除当前管理员账号")
+    if not database.delete_user(user_id):
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"ok": True}
 
 
 # ---------- 静态前端（必须放在 API 路由之后挂载） ----------

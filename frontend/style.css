@@ -284,6 +284,19 @@ body {
 .pwd-check.fail { color: #D43D3D; }
 .pwd-check.ok { color: #18a058; }
 
+/* ---------- 用户管理后台 ---------- */
+.admin-modal { max-width: 720px; }
+.admin-body { padding: 16px 18px; overflow: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.admin-table th { color: var(--text-2); font-weight: 600; font-size: 12px; }
+.status-tag { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.status-tag.ok { color: #18a058; background: rgba(24,160,88,0.1); }
+.status-tag.bad { color: #D43D3D; background: rgba(212,61,61,0.1); }
+.admin-act { border: none; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px; padding: 3px 8px; border-radius: 6px; }
+.admin-act:hover { color: var(--accent-dark); background: var(--accent-soft); }
+.admin-act.del-btn:hover { color: #D43D3D; background: rgba(212,61,61,0.08); }
+
 /* ---------- 浮窗 ---------- */
 .help-fab {
   position: fixed; right: 24px; bottom: 24px; z-index: 60;
