@@ -4,6 +4,10 @@
 
 > 笔试作品 · AI Native 研发岗位
 
+## 📸 界面预览
+
+![项目界面](docs/screenshot.png)
+
 ---
 
 ## ✨ 功能特性
