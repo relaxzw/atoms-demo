@@ -39,6 +39,7 @@
   var loginBtn = $("loginBtn");
   var regUsername = $("regUsername");
   var regPassword = $("regPassword");
+  var regConfirmPassword = $("regConfirmPassword");
   var pwdChecks = $("pwdChecks");
   var registerBtn = $("registerBtn");
   var adminBtn = $("adminBtn");
@@ -423,9 +424,11 @@
   registerBtn.addEventListener("click", function () {
     var username = regUsername.value.trim();
     var pwd = regPassword.value;
+    var confirmPwd = regConfirmPassword.value;
     if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) { alert("用户名仅支持字母、数字、下划线，3-30 位"); regUsername.focus(); return; }
     var errors = checkPasswordStrength(pwd);
     if (errors.length) { alert(errors.join("\n")); regPassword.focus(); return; }
+    if (pwd !== confirmPwd) { alert("两次输入的密码不一致，请重新输入"); regConfirmPassword.focus(); return; }
     registerBtn.disabled = true;
     api("/register", {
       method: "POST",
@@ -436,6 +439,9 @@
       document.querySelectorAll(".auth-tab")[0].click();
       loginUsername.value = username;
       loginPassword.value = "";
+      regPassword.value = "";
+      regConfirmPassword.value = "";
+      pwdChecks.innerHTML = "";
     }).catch(function (err) { alert(err.message); })
       .finally(function () { registerBtn.disabled = false; });
   });
