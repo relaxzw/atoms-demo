@@ -200,9 +200,12 @@
       userInfo.textContent = "👤 " + user;
       userInfo.hidden = false;
       authBtn.textContent = "退出";
+      authModal.hidden = true;  // 已登录：关闭登录门禁，展示主界面
     } else {
       userInfo.hidden = true;
       authBtn.textContent = "登录 / 注册";
+      authModal.hidden = false;  // 未登录：强制显示登录门禁
+      loadCaptcha();
     }
   }
 
@@ -366,8 +369,12 @@
     loadCaptcha();
   });
 
-  $("authModalClose").addEventListener("click", function () { authModal.hidden = true; });
-  authModal.addEventListener("click", function (e) { if (e.target === authModal) authModal.hidden = true; });
+  $("authModalClose").addEventListener("click", function () {
+    if (localStorage.getItem("atoms_user")) authModal.hidden = true;  // 未登录时禁止关闭门禁
+  });
+  authModal.addEventListener("click", function (e) {
+    if (e.target === authModal && localStorage.getItem("atoms_user")) authModal.hidden = true;
+  });
   captchaImg.addEventListener("click", loadCaptcha);
 
   document.querySelectorAll(".auth-tab").forEach(function (tab) {
