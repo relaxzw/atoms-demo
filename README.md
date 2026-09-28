@@ -20,6 +20,7 @@
 | 迭代再生 | 「重新生成」基于原需求继续优化 |
 | 对话式迭代 | 「修改应用」在现有应用基础上按指令继续修改（如“改成深色主题”） |
 | 用户注册登录 | 注册校验密码强度（至少一个大写、数字不连续）、SHA-256 加密传输、图形验证码登录 |
+| Token 计费 | 每次生成反馈本轮消耗 token 量，从用户余额扣减；余额不足提前拦截并提示联系服务商（电话可配置） |
 
 ## 🧱 技术栈
 
@@ -83,6 +84,12 @@ python backend/main.py
 - AI 调用全部发生在后端，前端只拿到生成结果，密钥不经过浏览器
 - 用户密码：前端 SHA-256 散列后传输（HTTP 下不明文），后端 PBKDF2 加盐二次散列存储，数据库泄露也无法还原
 
+### 💰 Token 计费配置（`.env` 可配置）
+
+- `DEFAULT_TOKEN_LIMIT=100000`：每个用户默认 Token 上限（新注册用户初始余额）
+- `SUPPORT_PHONE=15872398796`：余额不足时提示的服务商联系电话
+- 每次生成应用会从用户余额扣减实际消耗的 token 数，余额为 0 时提前拦截并提示联系服务商
+
 ## ❓ 常见问题（FAQ）
 
 **Q1：点「开始构建」报「尚未配置有效的 DEEPSEEK_API_KEY」？**
@@ -126,14 +133,15 @@ python backend/main.py
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/generate` | 生成应用，body: `{"prompt": "需求描述", "project_id": 可选}` |
+| POST | `/api/generate` | 生成应用（需登录），body: `{"prompt", "project_id", "instruction", "token"}`；返回含 `used_tokens`、`remaining_tokens` |
 | GET | `/api/projects` | 历史项目列表 |
 | GET | `/api/projects/{id}` | 项目详情（含完整代码） |
 | PATCH | `/api/projects/{id}` | 重命名项目，body: `{"name": "新名字"}` |
 | DELETE | `/api/projects/{id}` | 删除项目 |
 | GET | `/api/captcha` | 获取图形验证码（token + SVG） |
 | POST | `/api/register` | 注册，body: `{"username", "password_hash"}` |
-| POST | `/api/login` | 登录，body: `{"username", "password_hash", "captcha", "captcha_token"}` |
+| POST | `/api/login` | 登录，body: `{"username", "password_hash", "captcha", "captcha_token"}`；返回 `token`、`token_balance` |
+| GET | `/api/me?token=xxx` | 查询当前用户 Token 余额 |
 
 ## 🎯 笔试要求对照
 
