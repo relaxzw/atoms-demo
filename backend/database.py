@@ -40,10 +40,15 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+                token_balance INTEGER NOT NULL DEFAULT 100000,
                 created_at REAL NOT NULL
             )
             """
         )
+        # 迁移：旧 users 表若缺少 token_balance 列则补齐
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "token_balance" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN token_balance INTEGER NOT NULL DEFAULT 100000")
         conn.commit()
 
 
@@ -99,16 +104,16 @@ def rename_project(project_id: int, name: str) -> dict | None:
     return dict(row) if row else None
 
 
-def create_user(username: str, password_hash: str) -> dict | None:
+def create_user(username: str, password_hash: str, token_balance: int = 100000) -> dict | None:
     """创建用户，用户名已存在返回 None"""
     try:
         with _connect() as conn:
             cur = conn.execute(
-                "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
-                (username, password_hash, time.time()),
+                "INSERT INTO users (username, password_hash, token_balance, created_at) VALUES (?, ?, ?, ?)",
+                (username, password_hash, token_balance, time.time()),
             )
             conn.commit()
-            row = conn.execute("SELECT id, username, created_at FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+            row = conn.execute("SELECT id, username, token_balance, created_at FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
         return dict(row)
     except sqlite3.IntegrityError:
         return None
@@ -118,3 +123,9 @@ def get_user_by_username(username: str) -> dict | None:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     return dict(row) if row else None
+
+
+def update_token_balance(user_id: int, balance: int) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET token_balance = ? WHERE id = ?", (balance, user_id))
+        conn.commit()

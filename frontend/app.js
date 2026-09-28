@@ -197,7 +197,8 @@
   function updateUserInfo() {
     var user = localStorage.getItem("atoms_user");
     if (user) {
-      userInfo.textContent = "👤 " + user;
+      var balance = localStorage.getItem("atoms_balance");
+      userInfo.textContent = "👤 " + user + (balance !== null ? " · " + balance + " tokens" : "");
       userInfo.hidden = false;
       authBtn.textContent = "退出";
       authModal.hidden = true;  // 已登录：关闭登录门禁，展示主界面
@@ -253,6 +254,8 @@
     var body = { prompt: prompt.trim() };
     if (projectId) body.project_id = projectId;
     if (instruction) body.instruction = instruction.trim();
+    var authToken = localStorage.getItem("atoms_token");
+    if (authToken) body.token = authToken;
 
     var aborter = new AbortController();
     currentAbort = aborter;
@@ -265,10 +268,16 @@
     }).then(function (data) {
       clearInterval(timer);
       setStep(3);
-      statusText.textContent = "构建成功！";
+      if (data.used_tokens !== undefined) {
+        statusText.textContent = "构建成功！本轮消耗 " + data.used_tokens + " tokens，剩余 " + data.remaining_tokens + " tokens";
+        localStorage.setItem("atoms_balance", data.remaining_tokens);
+        updateUserInfo();
+      } else {
+        statusText.textContent = "构建成功！";
+      }
       showProject(data);
       loadProjects();
-      setTimeout(function () { statusArea.hidden = true; }, 1200);
+      setTimeout(function () { statusArea.hidden = true; }, 2500);
     }).catch(function (err) {
       clearInterval(timer);
       if (err && err.name === "AbortError") {
@@ -361,6 +370,7 @@
       if (confirm("确定退出登录吗？")) {
         localStorage.removeItem("atoms_user");
         localStorage.removeItem("atoms_token");
+        localStorage.removeItem("atoms_balance");
         updateUserInfo();
       }
       return;
@@ -435,6 +445,7 @@
     }).then(function (data) {
       localStorage.setItem("atoms_user", data.username);
       localStorage.setItem("atoms_token", data.token);
+      localStorage.setItem("atoms_balance", data.token_balance);
       updateUserInfo();
       authModal.hidden = true;
       loginCaptcha.value = "";
@@ -518,5 +529,12 @@
 
   /* ---------- 初始化 ---------- */
   updateUserInfo();
+  var savedToken = localStorage.getItem("atoms_token");
+  if (savedToken) {
+    api("/me?token=" + encodeURIComponent(savedToken)).then(function (d) {
+      localStorage.setItem("atoms_balance", d.token_balance);
+      updateUserInfo();
+    }).catch(function () {});
+  }
   loadProjects();
 })();

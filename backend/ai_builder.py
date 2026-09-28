@@ -156,7 +156,9 @@ def generate_app(prompt: str) -> dict:
 
     html_code = _clean_html(raw)
     name, description = _extract_meta(prompt)
-    return {"name": name, "description": description, "html_code": html_code}
+    usage = getattr(resp, "usage", None)
+    used_tokens = usage.total_tokens if usage else 0
+    return {"name": name, "description": description, "html_code": html_code, "used_tokens": used_tokens}
 
 
 def modify_app(instruction: str, existing_html: str) -> dict:
@@ -184,4 +186,6 @@ def modify_app(instruction: str, existing_html: str) -> dict:
 
     html_code = _clean_html(raw)
     name, description = _extract_meta(instruction)
-    return {"name": name, "description": description, "html_code": html_code}
+    usage = getattr(resp, "usage", None)
+    used_tokens = usage.total_tokens if usage else 0
+    return {"name": name, "description": description, "html_code": html_code, "used_tokens": used_tokens}

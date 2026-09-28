@@ -33,6 +33,23 @@ import ai_builder
 import auth
 import database
 
+# ---------- 业务配置（可 .env 覆盖） ----------
+SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "15872398796")
+DEFAULT_TOKEN_LIMIT = int(os.environ.get("DEFAULT_TOKEN_LIMIT", "100000"))
+
+# ---------- 登录会话（内存 token → 用户） ----------
+_sessions: dict[str, dict] = {}
+_SESSION_TTL = 86400  # 24 小时
+
+
+def _auth_user(token: str) -> dict | None:
+    """校验登录 token，返回用户或 None"""
+    s = _sessions.get(token)
+    if not s or s["expires"] < time.time():
+        return None
+    return database.get_user_by_username(s["username"])
+
+
 # ---------- 初始化 ----------
 database.init_db()
 
@@ -84,6 +101,7 @@ class GenerateRequest(BaseModel):
     prompt: str = Field(..., min_length=2, max_length=2000, description="用户描述想构建的应用")
     project_id: int | None = Field(default=None, description="传入则在该项目上迭代更新")
     instruction: str | None = Field(default=None, max_length=1000, description="传入则在现有代码基础上按指令修改")
+    token: str | None = Field(default=None, description="登录令牌，用于识别用户并扣减 Token 余额")
 
 
 class RenameRequest(BaseModel):
@@ -109,14 +127,25 @@ class GenerateResponse(BaseModel):
     prompt: str
     html_code: str
     created_at: float
+    used_tokens: int = 0
+    remaining_tokens: int = 0
 
 
 # ---------- API 路由 ----------
 @app.post("/api/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest):
-    """核心流程：需求 → DeepSeek 生成 → 保存（或迭代更新）"""
+    """核心流程：鉴权 → 余额检查 → DeepSeek 生成 → 扣减 Token → 保存"""
     if _rate_limited():
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试。")
+
+    # 登录鉴权
+    user = _auth_user(req.token or "")
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录后再生成应用")
+
+    # Token 余额检查（不足则提前告知，无法执行）
+    if user["token_balance"] <= 0:
+        raise HTTPException(status_code=402, detail=f"Token 余额不足，无法执行本轮生成，请联系服务商：{SUPPORT_PHONE}")
 
     # 模式一：基于现有项目按指令修改（对话式迭代）
     if req.instruction and req.project_id:
@@ -127,21 +156,29 @@ def generate(req: GenerateRequest):
             result = ai_builder.modify_app(req.instruction, existing["html_code"])
         except ai_builder.AIBuilderError as e:
             raise HTTPException(status_code=502, detail=str(e))
-        # 修改模式保留原名称与简介，只更新代码
-        return database.update_project(req.project_id, existing["name"], existing["description"], result["html_code"])
+        resp = database.update_project(req.project_id, existing["name"], existing["description"], result["html_code"])
+    else:
+        # 模式二：全新生成 / 原需求重新生成（覆盖）
+        try:
+            result = ai_builder.generate_app(req.prompt)
+        except ai_builder.AIBuilderError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        if req.project_id:
+            updated = database.update_project(req.project_id, result["name"], result["description"], result["html_code"])
+            if updated is None:
+                raise HTTPException(status_code=404, detail="项目不存在")
+            resp = updated
+        else:
+            resp = database.create_project(result["name"], result["description"], req.prompt, result["html_code"])
 
-    # 模式二：全新生成 / 原需求重新生成（覆盖）
-    try:
-        result = ai_builder.generate_app(req.prompt)
-    except ai_builder.AIBuilderError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    # 扣减用户 Token 余额
+    used = result.get("used_tokens", 0)
+    new_balance = max(0, user["token_balance"] - used)
+    database.update_token_balance(user["id"], new_balance)
 
-    if req.project_id:
-        updated = database.update_project(req.project_id, result["name"], result["description"], result["html_code"])
-        if updated is None:
-            raise HTTPException(status_code=404, detail="项目不存在")
-        return updated
-    return database.create_project(result["name"], result["description"], req.prompt, result["html_code"])
+    resp["used_tokens"] = used
+    resp["remaining_tokens"] = new_balance
+    return resp
 
 
 @app.get("/api/projects")
@@ -213,10 +250,10 @@ def register(req: RegisterRequest):
     if database.get_user_by_username(username):
         raise HTTPException(status_code=409, detail="用户名已存在")
     stored = auth.hash_password(req.password_hash)
-    user = database.create_user(username, stored)
+    user = database.create_user(username, stored, DEFAULT_TOKEN_LIMIT)
     if user is None:
         raise HTTPException(status_code=409, detail="用户名已存在")
-    return {"ok": True, "username": user["username"]}
+    return {"ok": True, "username": user["username"], "token_balance": user["token_balance"]}
 
 
 @app.post("/api/login")
@@ -231,7 +268,17 @@ def login(req: LoginRequest):
     if user is None or not auth.verify_password(req.password_hash, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = secrets.token_hex(32)
-    return {"ok": True, "token": token, "username": user["username"]}
+    _sessions[token] = {"username": user["username"], "expires": time.time() + _SESSION_TTL}
+    return {"ok": True, "token": token, "username": user["username"], "token_balance": user["token_balance"]}
+
+
+@app.get("/api/me")
+def me(token: str):
+    """查询当前登录用户的 Token 余额"""
+    user = _auth_user(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    return {"username": user["username"], "token_balance": user["token_balance"]}
 
 
 # ---------- 静态前端（必须放在 API 路由之后挂载） ----------
