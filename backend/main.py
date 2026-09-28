@@ -335,10 +335,12 @@ def admin_list_users(token: str):
 def admin_disable_user(user_id: int, token: str):
     if _auth_admin(token) is None:
         raise HTTPException(status_code=403, detail="无管理员权限")
-    u = database.set_user_status(user_id, "disabled")
-    if u is None:
+    target = database.get_user_by_id(user_id)
+    if target is None:
         raise HTTPException(status_code=404, detail="用户不存在")
-    return u
+    if target["is_admin"]:
+        raise HTTPException(status_code=400, detail="不能禁用管理员账号")
+    return database.set_user_status(user_id, "disabled")
 
 
 @app.post("/api/admin/users/{user_id}/enable")
@@ -353,13 +355,14 @@ def admin_enable_user(user_id: int, token: str):
 
 @app.delete("/api/admin/users/{user_id}")
 def admin_delete_user(user_id: int, token: str):
-    admin = _auth_admin(token)
-    if admin is None:
+    if _auth_admin(token) is None:
         raise HTTPException(status_code=403, detail="无管理员权限")
-    if user_id == admin["id"]:
-        raise HTTPException(status_code=400, detail="不能删除当前管理员账号")
-    if not database.delete_user(user_id):
+    target = database.get_user_by_id(user_id)
+    if target is None:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if target["is_admin"]:
+        raise HTTPException(status_code=400, detail="不能删除管理员账号")
+    database.delete_user(user_id)
     return {"ok": True}
 
 

@@ -296,6 +296,7 @@ body {
 .admin-act { border: none; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px; padding: 3px 8px; border-radius: 6px; }
 .admin-act:hover { color: var(--accent-dark); background: var(--accent-soft); }
 .admin-act.del-btn:hover { color: #D43D3D; background: rgba(212,61,61,0.08); }
+.muted { color: #c0c4cc; }
 
 /* ---------- 浮窗 ---------- */
 .help-fab {

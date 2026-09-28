@@ -487,10 +487,15 @@
           ? '<span class="status-tag ok">正常</span>'
           : '<span class="status-tag bad">已禁用</span>';
         var role = u.is_admin ? "管理员" : "用户";
-        var btns = u.status === "active"
-          ? '<button class="admin-act" data-act="disable" data-id="' + u.id + '">禁用</button>'
-          : '<button class="admin-act" data-act="enable" data-id="' + u.id + '">启用</button>';
-        btns += '<button class="admin-act del-btn" data-act="delete" data-id="' + u.id + '">删除</button>';
+        var btns = "";
+        if (u.is_admin) {
+          btns = '<span class="muted">—</span>';
+        } else {
+          btns = u.status === "active"
+            ? '<button class="admin-act" data-act="disable" data-id="' + u.id + '">禁用</button>'
+            : '<button class="admin-act" data-act="enable" data-id="' + u.id + '">启用</button>';
+          btns += '<button class="admin-act del-btn" data-act="delete" data-id="' + u.id + '">删除</button>';
+        }
         return '<tr>' +
           "<td>" + u.id + "</td>" +
           "<td>" + escapeHtml(u.username) + "</td>" +

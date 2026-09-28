@@ -131,6 +131,12 @@ def get_user_by_username(username: str) -> dict | None:
     return dict(row) if row else None
 
 
+def get_user_by_id(user_id: int) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def update_token_balance(user_id: int, balance: int) -> None:
     with _connect() as conn:
         conn.execute("UPDATE users SET token_balance = ? WHERE id = ?", (balance, user_id))
