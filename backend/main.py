@@ -10,6 +10,7 @@ main.py —— Atoms Demo 后端入口（FastAPI）
 1. 提供 /api/* 接口：AI 生成应用、历史项目持久化（SQLite）
 2. 伺服 frontend/ 下的静态前端，前后端一体，单进程运行
 """
+import hashlib
 import os
 import re
 import secrets
@@ -37,6 +38,14 @@ import database
 SUPPORT_PHONE = os.environ.get("SUPPORT_PHONE", "15872398796")
 DEFAULT_TOKEN_LIMIT = int(os.environ.get("DEFAULT_TOKEN_LIMIT", "100000"))
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "123456")
+
+
+def _ensure_admin() -> None:
+    """启动时确保预设管理员账号存在（用户名/密码由 .env 配置）"""
+    if database.get_user_by_username(ADMIN_USERNAME) is None:
+        sha = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
+        database.create_user(ADMIN_USERNAME, auth.hash_password(sha), DEFAULT_TOKEN_LIMIT, is_admin=1)
 
 # ---------- 登录会话（内存 token → 用户） ----------
 _sessions: dict[str, dict] = {}
@@ -53,6 +62,7 @@ def _auth_user(token: str) -> dict | None:
 
 # ---------- 初始化 ----------
 database.init_db()
+_ensure_admin()
 
 # 简单内存限流：限制每分钟生成请求数，防止公网部署时被刷接口消耗 DeepSeek 额度
 _RATE_WINDOW = 60.0
@@ -119,6 +129,12 @@ class LoginRequest(BaseModel):
     password_hash: str = Field(..., min_length=64, max_length=64, description="前端 SHA-256 后的密码（hex）")
     captcha: str = Field(..., min_length=1, max_length=8, description="图形验证码")
     captcha_token: str = Field(..., min_length=1, description="验证码令牌")
+
+
+class ChangePasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1, description="登录令牌")
+    old_password_hash: str = Field(..., min_length=64, max_length=64, description="原密码 SHA-256（hex）")
+    new_password_hash: str = Field(..., min_length=64, max_length=64, description="新密码 SHA-256（hex）")
 
 
 class GenerateResponse(BaseModel):
@@ -283,6 +299,20 @@ def me(token: str):
     if user is None:
         raise HTTPException(status_code=401, detail="请先登录")
     return {"username": user["username"], "token_balance": user["token_balance"], "is_admin": user["is_admin"]}
+
+
+@app.post("/api/change-password")
+def change_password(req: ChangePasswordRequest):
+    """修改当前用户密码"""
+    user = _auth_user(req.token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if not auth.verify_password(req.old_password_hash, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="原密码错误")
+    if not re.fullmatch(r"[0-9a-f]{64}", req.new_password_hash):
+        raise HTTPException(status_code=400, detail="新密码格式不正确")
+    database.update_password(user["id"], auth.hash_password(req.new_password_hash))
+    return {"ok": True}
 
 
 def _auth_admin(token: str) -> dict | None:

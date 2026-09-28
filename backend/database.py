@@ -160,3 +160,9 @@ def delete_user(user_id: int) -> bool:
         cur = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
     return cur.rowcount > 0
+
+
+def update_password(user_id: int, password_hash: str) -> None:
+    with _connect() as conn:
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+        conn.commit()

@@ -22,6 +22,7 @@
       <div class="nav-right">
         <button id="authBtn" class="btn btn-ghost btn-sm">登录 / 注册</button>
         <span id="userInfo" class="user-info" hidden></span>
+        <button id="changePwdNavBtn" class="btn btn-ghost btn-sm" hidden>修改密码</button>
         <button id="adminBtn" class="btn btn-ghost btn-sm" hidden>用户管理</button>
         <button id="openPreviewBtn" class="btn btn-primary btn-sm" disabled>打开应用 ↗</button>
       </div>
@@ -150,6 +151,23 @@
           <div class="pwd-checks" id="pwdChecks"></div>
           <button id="registerBtn" class="btn btn-primary btn-block">注册</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 修改密码弹窗 -->
+  <div class="modal-mask" id="changePwdModal" hidden>
+    <div class="modal auth-modal">
+      <div class="modal-head">
+        <h3>修改密码</h3>
+        <button class="modal-close" id="changePwdClose">✕</button>
+      </div>
+      <div class="auth-body">
+        <input id="oldPwd" type="password" placeholder="原密码" autocomplete="current-password" />
+        <input id="newPwd" type="password" placeholder="新密码" autocomplete="new-password" />
+        <input id="confirmPwd" type="password" placeholder="确认新密码" autocomplete="new-password" />
+        <div class="pwd-checks" id="newPwdChecks"></div>
+        <button id="changePwdBtn" class="btn btn-primary btn-block">确认修改</button>
       </div>
     </div>
   </div>

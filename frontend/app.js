@@ -44,6 +44,13 @@
   var adminBtn = $("adminBtn");
   var adminModal = $("adminModal");
   var adminUserList = $("adminUserList");
+  var changePwdNavBtn = $("changePwdNavBtn");
+  var changePwdModal = $("changePwdModal");
+  var oldPwd = $("oldPwd");
+  var newPwd = $("newPwd");
+  var confirmPwd = $("confirmPwd");
+  var newPwdChecks = $("newPwdChecks");
+  var changePwdBtn = $("changePwdBtn");
   var currentCaptchaToken = "";
 
   var currentProject = null;   // { id, name, description, prompt, html_code, created_at }
@@ -206,11 +213,13 @@
       authBtn.textContent = "退出";
       authModal.hidden = true;  // 已登录：关闭登录门禁，展示主界面
       adminBtn.hidden = localStorage.getItem("atoms_is_admin") !== "1";
+      changePwdNavBtn.hidden = false;
     } else {
       userInfo.hidden = true;
       authBtn.textContent = "登录 / 注册";
       authModal.hidden = false;  // 未登录：强制显示登录门禁
       adminBtn.hidden = true;
+      changePwdNavBtn.hidden = true;
       loadCaptcha();
     }
   }
@@ -516,6 +525,47 @@
       api("/admin/users/" + id + "/" + act + "?token=" + encodeURIComponent(token), { method: "POST" })
         .then(loadAdminUsers).catch(function (err) { alert(err.message); });
     }
+  });
+
+  /* ---------- 修改密码 ---------- */
+  changePwdNavBtn.addEventListener("click", function () {
+    changePwdModal.hidden = false;
+    oldPwd.value = "";
+    newPwd.value = "";
+    confirmPwd.value = "";
+    newPwdChecks.innerHTML = "";
+  });
+
+  $("changePwdClose").addEventListener("click", function () { changePwdModal.hidden = true; });
+  changePwdModal.addEventListener("click", function (e) { if (e.target === changePwdModal) changePwdModal.hidden = true; });
+
+  newPwd.addEventListener("input", function () {
+    var errors = checkPasswordStrength(newPwd.value);
+    newPwdChecks.innerHTML = errors.length
+      ? errors.map(function (e) { return '<div class="pwd-check fail">✗ ' + e + "</div>"; }).join("")
+      : '<div class="pwd-check ok">✓ 密码强度合格</div>';
+  });
+
+  changePwdBtn.addEventListener("click", function () {
+    var old = oldPwd.value;
+    var nw = newPwd.value;
+    var cf = confirmPwd.value;
+    if (!old) { oldPwd.focus(); return; }
+    if (!nw) { newPwd.focus(); return; }
+    var errors = checkPasswordStrength(nw);
+    if (errors.length) { alert(errors.join("\n")); newPwd.focus(); return; }
+    if (nw !== cf) { alert("两次输入的新密码不一致"); confirmPwd.focus(); return; }
+    var token = localStorage.getItem("atoms_token");
+    changePwdBtn.disabled = true;
+    api("/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token, old_password_hash: sha256Hex(old), new_password_hash: sha256Hex(nw) }),
+    }).then(function () {
+      alert("密码修改成功");
+      changePwdModal.hidden = true;
+    }).catch(function (err) { alert(err.message); })
+      .finally(function () { changePwdBtn.disabled = false; });
   });
 
   /* ---------- 历史项目 ---------- */
