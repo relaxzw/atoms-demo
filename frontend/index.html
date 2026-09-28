@@ -20,6 +20,8 @@
         <a href="#how">工作原理</a>
       </nav>
       <div class="nav-right">
+        <button id="authBtn" class="btn btn-ghost btn-sm">登录 / 注册</button>
+        <span id="userInfo" class="user-info" hidden></span>
         <button id="openPreviewBtn" class="btn btn-primary btn-sm" disabled>打开应用 ↗</button>
       </div>
     </div>
@@ -117,6 +119,36 @@
       <pre class="code-view" id="codeView"></pre>
       <div class="modal-foot">
         <button id="copyCodeBtn" class="btn btn-ghost btn-sm">复制代码</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 登录注册弹窗 -->
+  <div class="modal-mask" id="authModal" hidden>
+    <div class="modal auth-modal">
+      <div class="modal-head">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="login">登录</button>
+          <button class="auth-tab" data-tab="register">注册</button>
+        </div>
+        <button class="modal-close" id="authModalClose">✕</button>
+      </div>
+      <div class="auth-body">
+        <div class="auth-pane" id="loginPane">
+          <input id="loginUsername" type="text" placeholder="用户名" autocomplete="username" />
+          <input id="loginPassword" type="password" placeholder="密码" autocomplete="current-password" />
+          <div class="captcha-row">
+            <input id="loginCaptcha" type="text" placeholder="验证码" maxlength="4" autocomplete="off" />
+            <div id="captchaImg" class="captcha-img" title="点击刷新验证码"></div>
+          </div>
+          <button id="loginBtn" class="btn btn-primary btn-block">登录</button>
+        </div>
+        <div class="auth-pane" id="registerPane" hidden>
+          <input id="regUsername" type="text" placeholder="用户名（3-30 位字母/数字/下划线）" autocomplete="username" />
+          <input id="regPassword" type="password" placeholder="密码" autocomplete="new-password" />
+          <div class="pwd-checks" id="pwdChecks"></div>
+          <button id="registerBtn" class="btn btn-primary btn-block">注册</button>
+        </div>
       </div>
     </div>
   </div>

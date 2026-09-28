@@ -27,6 +27,21 @@
   var helpPop = $("helpPop");
   var modifyInput = $("modifyInput");
   var modifyBtn = $("modifyBtn");
+  var authBtn = $("authBtn");
+  var userInfo = $("userInfo");
+  var authModal = $("authModal");
+  var loginPane = $("loginPane");
+  var registerPane = $("registerPane");
+  var loginUsername = $("loginUsername");
+  var loginPassword = $("loginPassword");
+  var loginCaptcha = $("loginCaptcha");
+  var captchaImg = $("captchaImg");
+  var loginBtn = $("loginBtn");
+  var regUsername = $("regUsername");
+  var regPassword = $("regPassword");
+  var pwdChecks = $("pwdChecks");
+  var registerBtn = $("registerBtn");
+  var currentCaptchaToken = "";
 
   var currentProject = null;   // { id, name, description, prompt, html_code, created_at }
   var currentHtml = "";
@@ -79,6 +94,123 @@
     a.download = (name || "app") + ".html";
     a.click();
     URL.revokeObjectURL(a.href);
+  }
+
+  /* ---------- 认证：SHA-256 + 密码强度 ---------- */
+  // SHA-256 纯 JS 实现（兼容 HTTP 非安全上下文，不依赖 crypto.subtle）
+  function sha256(ascii) {
+    function rightRotate(value, amount) {
+      return (value >>> amount) | (value << (32 - amount));
+    }
+    var maxWord = Math.pow(2, 32);
+    var result = "";
+    var words = [];
+    var asciiBitLength = ascii.length * 8;
+    var hash = sha256.h = sha256.h || [];
+    var k = sha256.k = sha256.k || [];
+    var primeCounter = k.length;
+    var isComposite = {};
+    for (var candidate = 2; primeCounter < 64; candidate++) {
+      if (!isComposite[candidate]) {
+        for (var i = 0; i < 313; i += candidate) {
+          isComposite[i] = candidate;
+        }
+        hash[primeCounter] = (Math.pow(candidate, 0.5) * maxWord) | 0;
+        k[primeCounter++] = (Math.pow(candidate, 1 / 3) * maxWord) | 0;
+      }
+    }
+    ascii += "\x80";
+    while ((ascii.length % 64) - 56) ascii += "\x00";
+    for (var i = 0; i < ascii.length; i++) {
+      var j = ascii.charCodeAt(i);
+      if (j >> 8) return "";
+      words[i >> 2] |= j << (((3 - i) % 4) * 8);
+    }
+    words[words.length] = (asciiBitLength / maxWord) | 0;
+    words[words.length] = asciiBitLength;
+    for (var j = 0; j < words.length; ) {
+      var w = words.slice(j, (j += 16));
+      var oldHash = hash;
+      hash = hash.slice(0, 8);
+      for (var i = 0; i < 64; i++) {
+        var w15 = w[i - 15], w2 = w[i - 2];
+        var a = hash[0], e = hash[4];
+        var temp1 = hash[7] +
+          (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25)) +
+          ((e & hash[5]) ^ (~e & hash[6])) + k[i] +
+          (w[i] = i < 16 ? w[i] : (w[i - 16] +
+            (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3)) +
+            w[i - 7] +
+            (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))) | 0);
+        var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22)) +
+          ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+        hash = [(temp1 + temp2) | 0].concat(hash);
+        hash[4] = (hash[4] + temp1) | 0;
+      }
+      for (var i = 0; i < 8; i++) {
+        hash[i] = (hash[i] + oldHash[i]) | 0;
+      }
+    }
+    for (var i = 0; i < 8; i++) {
+      for (var j = 3; j + 1; j--) {
+        var b = (hash[i] >> (j * 8)) & 255;
+        result += (b < 16 ? "0" : "") + b.toString(16);
+      }
+    }
+    return result;
+  }
+
+  function sha256Hex(str) {
+    var binary = "";
+    if (typeof TextEncoder !== "undefined") {
+      var bytes = new TextEncoder().encode(str);
+      for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    } else {
+      binary = str;
+    }
+    return sha256(binary);
+  }
+
+  function hasConsecutiveDigits(pwd) {
+    for (var i = 0; i + 2 < pwd.length; i++) {
+      var seq = pwd.slice(i, i + 3);
+      if (/^\d{3}$/.test(seq)) {
+        var n = seq.split("").map(Number);
+        if ((n[1] === n[0] + 1 && n[2] === n[1] + 1) || (n[1] === n[0] - 1 && n[2] === n[1] - 1)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function checkPasswordStrength(pwd) {
+    var errors = [];
+    if (pwd.length < 8) errors.push("密码长度至少 8 位");
+    if (!/[A-Z]/.test(pwd)) errors.push("至少包含一个大写字母");
+    if (!/[a-z]/.test(pwd)) errors.push("至少包含一个小写字母");
+    if (!/[0-9]/.test(pwd)) errors.push("至少包含一个数字");
+    if (hasConsecutiveDigits(pwd)) errors.push("数字不能连续（如 123、456）");
+    return errors;
+  }
+
+  function updateUserInfo() {
+    var user = localStorage.getItem("atoms_user");
+    if (user) {
+      userInfo.textContent = "👤 " + user;
+      userInfo.hidden = false;
+      authBtn.textContent = "退出";
+    } else {
+      userInfo.hidden = true;
+      authBtn.textContent = "登录 / 注册";
+    }
+  }
+
+  function loadCaptcha() {
+    api("/captcha").then(function (data) {
+      currentCaptchaToken = data.token;
+      captchaImg.innerHTML = data.svg;
+    }).catch(function (err) { alert("验证码加载失败：" + err.message); });
   }
 
   /* ---------- 核心：生成 / 展示 ---------- */
@@ -220,6 +352,94 @@
 
   helpFab.addEventListener("click", function () { helpPop.hidden = !helpPop.hidden; });
 
+  /* ---------- 注册登录事件 ---------- */
+  authBtn.addEventListener("click", function () {
+    if (localStorage.getItem("atoms_user")) {
+      if (confirm("确定退出登录吗？")) {
+        localStorage.removeItem("atoms_user");
+        localStorage.removeItem("atoms_token");
+        updateUserInfo();
+      }
+      return;
+    }
+    authModal.hidden = false;
+    loadCaptcha();
+  });
+
+  $("authModalClose").addEventListener("click", function () { authModal.hidden = true; });
+  authModal.addEventListener("click", function (e) { if (e.target === authModal) authModal.hidden = true; });
+  captchaImg.addEventListener("click", loadCaptcha);
+
+  document.querySelectorAll(".auth-tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll(".auth-tab").forEach(function (t) { t.classList.remove("active"); });
+      tab.classList.add("active");
+      var isLogin = tab.getAttribute("data-tab") === "login";
+      loginPane.hidden = !isLogin;
+      registerPane.hidden = isLogin;
+      if (isLogin) loadCaptcha();
+    });
+  });
+
+  regPassword.addEventListener("input", function () {
+    var errors = checkPasswordStrength(regPassword.value);
+    pwdChecks.innerHTML = errors.length
+      ? errors.map(function (e) { return '<div class="pwd-check fail">✗ ' + e + "</div>"; }).join("")
+      : '<div class="pwd-check ok">✓ 密码强度合格</div>';
+  });
+
+  registerBtn.addEventListener("click", function () {
+    var username = regUsername.value.trim();
+    var pwd = regPassword.value;
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) { alert("用户名仅支持字母、数字、下划线，3-30 位"); regUsername.focus(); return; }
+    var errors = checkPasswordStrength(pwd);
+    if (errors.length) { alert(errors.join("\n")); regPassword.focus(); return; }
+    registerBtn.disabled = true;
+    api("/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username, password_hash: sha256Hex(pwd) }),
+    }).then(function (data) {
+      alert("注册成功，请登录");
+      document.querySelectorAll(".auth-tab")[0].click();
+      loginUsername.value = username;
+      loginPassword.value = "";
+    }).catch(function (err) { alert(err.message); })
+      .finally(function () { registerBtn.disabled = false; });
+  });
+
+  loginBtn.addEventListener("click", function () {
+    var username = loginUsername.value.trim();
+    var pwd = loginPassword.value;
+    var captcha = loginCaptcha.value.trim();
+    if (!username) { loginUsername.focus(); return; }
+    if (!pwd) { loginPassword.focus(); return; }
+    if (!captcha) { loginCaptcha.focus(); return; }
+    loginBtn.disabled = true;
+    api("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: username,
+        password_hash: sha256Hex(pwd),
+        captcha: captcha,
+        captcha_token: currentCaptchaToken,
+      }),
+    }).then(function (data) {
+      localStorage.setItem("atoms_user", data.username);
+      localStorage.setItem("atoms_token", data.token);
+      updateUserInfo();
+      authModal.hidden = true;
+      loginCaptcha.value = "";
+      loginPassword.value = "";
+      alert("登录成功，欢迎 " + data.username);
+    }).catch(function (err) {
+      alert(err.message);
+      loadCaptcha();
+      loginCaptcha.value = "";
+    }).finally(function () { loginBtn.disabled = false; });
+  });
+
   /* ---------- 历史项目 ---------- */
   function loadProjects() {
     api("/projects").then(function (list) {
@@ -290,5 +510,6 @@
   }
 
   /* ---------- 初始化 ---------- */
+  updateUserInfo();
   loadProjects();
 })();

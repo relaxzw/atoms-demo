@@ -19,6 +19,7 @@
 | 一键打开 | 将生成的应用在新标签页独立运行 |
 | 迭代再生 | 「重新生成」基于原需求继续优化 |
 | 对话式迭代 | 「修改应用」在现有应用基础上按指令继续修改（如“改成深色主题”） |
+| 用户注册登录 | 注册校验密码强度（至少一个大写、数字不连续）、SHA-256 加密传输、图形验证码登录 |
 
 ## 🧱 技术栈
 
@@ -34,6 +35,7 @@ atoms-demo/
 │   ├── main.py          # FastAPI 入口（API + 静态伺服）
 │   ├── ai_builder.py    # DeepSeek 调用与代码清洗
 │   ├── database.py      # SQLite 持久化
+│   ├── auth.py          # 注册登录认证（密码校验 / 散列 / 验证码）
 │   ├── requirements.txt # Python 依赖
 │   └── .env.example     # 环境变量模板（复制为 .env 使用）
 ├── frontend/
@@ -79,6 +81,7 @@ python backend/main.py
 - 真实密钥只写在 `backend/.env`（已被 `.gitignore` 排除，**不会**提交到 Git）
 - 仓库只包含 `.env.example` 占位模板，提交到 GitHub 安全
 - AI 调用全部发生在后端，前端只拿到生成结果，密钥不经过浏览器
+- 用户密码：前端 SHA-256 散列后传输（HTTP 下不明文），后端 PBKDF2 加盐二次散列存储，数据库泄露也无法还原
 
 ## ❓ 常见问题（FAQ）
 
@@ -128,6 +131,9 @@ python backend/main.py
 | GET | `/api/projects/{id}` | 项目详情（含完整代码） |
 | PATCH | `/api/projects/{id}` | 重命名项目，body: `{"name": "新名字"}` |
 | DELETE | `/api/projects/{id}` | 删除项目 |
+| GET | `/api/captcha` | 获取图形验证码（token + SVG） |
+| POST | `/api/register` | 注册，body: `{"username", "password_hash"}` |
+| POST | `/api/login` | 登录，body: `{"username", "password_hash", "captcha", "captcha_token"}` |
 
 ## 🎯 笔试要求对照
 
@@ -145,4 +151,4 @@ python backend/main.py
 - **原生前端**：零构建、零 CDN，评审环境离线/国内访问均稳定；代价是代码组织不如框架工程化
 - **沙箱预览**：iframe `sandbox="allow-scripts allow-modals allow-forms allow-popups"`，隔离 AI 生成代码，避免影响宿主页面
 - **生成策略**：一次调用产出完整 HTML（内联样式与脚本），再做元信息提取（名称/描述），速度与质量的平衡
-- **未做/后续可扩展**：多轮对话式迭代（当前为单轮再生）、用户登录与私有项目、更多模板/示例、流式输出（SSE 打字机效果）、生成应用的单元测试
+- **未做/后续可扩展**：多轮对话式迭代（当前为单轮再生）、私有项目与数据隔离、更多模板/示例、流式输出（SSE 打字机效果）、生成应用的单元测试

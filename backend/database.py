@@ -34,6 +34,16 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 
@@ -86,4 +96,25 @@ def rename_project(project_id: int, name: str) -> dict | None:
         conn.execute("UPDATE projects SET name = ? WHERE id = ?", (name, project_id))
         conn.commit()
         row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def create_user(username: str, password_hash: str) -> dict | None:
+    """创建用户，用户名已存在返回 None"""
+    try:
+        with _connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                (username, password_hash, time.time()),
+            )
+            conn.commit()
+            row = conn.execute("SELECT id, username, created_at FROM users WHERE id = ?", (cur.lastrowid,)).fetchone()
+        return dict(row)
+    except sqlite3.IntegrityError:
+        return None
+
+
+def get_user_by_username(username: str) -> dict | None:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
     return dict(row) if row else None
